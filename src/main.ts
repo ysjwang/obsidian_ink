@@ -100,6 +100,13 @@ function implementWritingEmbedActions(plugin: InkPlugin) {
 		icon: 'write_default',
 		editorCallback: (editor: Editor) => insertNewWritingFile(plugin, editor)
 	});
+	// Stub: currently identical to 'New handwriting section'. Will diverge to add transcription.
+	plugin.addCommand({
+		id: 'create-transcribed-section',
+		name: 'New transcribed section',
+		icon: 'write_default',
+		editorCallback: (editor: Editor) => insertNewWritingFile(plugin, editor)
+	});
 	plugin.addCommand({
 		id: 'embed-writing-file',
 		name: 'Existing handwriting section',

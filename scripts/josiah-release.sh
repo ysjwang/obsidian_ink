@@ -83,9 +83,9 @@ log "Version: $CUR -> $NEW"
 gh release view "$NEW" --repo "$REPO" >/dev/null 2>&1 && die "Release/tag $NEW already exists on $REPO"
 
 if [ "$DRY_RUN" -eq 1 ]; then
-  log "[dry-run] Would bump manifest.json, manifest-beta.json, versions.json to $NEW"
+  log "[dry-run] Would bump manifest.json, manifest-beta.json, package.json, versions.json to $NEW"
   log "[dry-run] Would run: npm run build"
-  [ "$DO_PUSH" -eq 1 ] && log "[dry-run] Would commit + push the version bump to $BRANCH"
+  [ "$DO_PUSH" -eq 1 ] && log "[dry-run] Would commit ALL working-tree changes + push to $BRANCH"
   log "[dry-run] Would create release $NEW on $REPO with main.js, manifest.json, styles.css"
   exit 0
 fi
@@ -95,10 +95,11 @@ log "Bumping version files to $NEW"
 node -e '
   const fs = require("fs");
   const v = process.argv[1];
-  for (const f of ["manifest.json", "manifest-beta.json"]) {
-    const m = JSON.parse(fs.readFileSync(f, "utf8"));
-    m.version = v;
-    fs.writeFileSync(f, JSON.stringify(m, null, "\t") + "\n");
+  // Keep every file that tracks the version in sync.
+  for (const f of ["manifest.json", "manifest-beta.json", "package.json"]) {
+    const j = JSON.parse(fs.readFileSync(f, "utf8"));
+    j.version = v;
+    fs.writeFileSync(f, JSON.stringify(j, null, "\t") + "\n");
   }
   // versions.json maps plugin version -> minAppVersion (Obsidian convention)
   const minApp = JSON.parse(fs.readFileSync("manifest.json", "utf8")).minAppVersion;
@@ -117,9 +118,12 @@ done
 
 # --- commit + push the bump so the tag points at the right commit -----------
 if [ "$DO_PUSH" -eq 1 ]; then
-  log "Committing + pushing version bump"
-  git add manifest.json manifest-beta.json versions.json
-  git commit -m "Release $NEW" >/dev/null 2>&1 || log "Nothing to commit (files unchanged)"
+  # Stage ALL working-tree changes (dist/ etc. are gitignored) so the committed
+  # source always matches the binary we just built and are about to release.
+  log "Committing + pushing release (all working-tree changes)"
+  git add -A
+  git status --short
+  git commit -m "Release $NEW" >/dev/null 2>&1 || log "Nothing to commit (tree already clean)"
   git push origin "$BRANCH"
   TARGET_ARGS=(--target "$BRANCH")
 else

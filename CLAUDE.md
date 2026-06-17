@@ -35,7 +35,7 @@ npm run release -- 0.5.0 --dry-run   # preview without changing or publishing an
 npm run release -- patch --no-push   # tag current HEAD; skip the version-bump commit/push
 ```
 
-What it does: computes the next semver from `manifest.json`, writes it into `manifest.json` + `manifest-beta.json` + `versions.json`, runs `npm run build`, commits & pushes the bump to the current branch, then `gh release create`s a release whose assets are `dist/{main.js,manifest.json,styles.css}` (the three files BRAT reads). The release **tag must equal the manifest `version`** or BRAT rejects it — the script guarantees this.
+What it does: computes the next semver from `manifest.json`, writes it into `manifest.json` + `manifest-beta.json` + `package.json` + `versions.json`, runs `npm run build`, commits **all** working-tree changes (`git add -A`) and pushes to the current branch, then `gh release create`s a release whose assets are `dist/{main.js,manifest.json,styles.css}` (the three files BRAT reads). The release **tag must equal the manifest `version`** or BRAT rejects it — the script guarantees this. It stages everything (not just version files) on purpose: the build compiles the working tree, so committing only version bumps would let the released binary drift from the committed source.
 
 Requirements: `gh` authenticated (`gh auth login`) with push access. The target repo is derived from the **`origin`** remote (intentionally not `gh`'s default-repo resolution, which points at the upstream fork parent). BRAT then installs/updates from `https://github.com/<origin-owner>/obsidian_ink`.
 
