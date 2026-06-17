@@ -1,6 +1,6 @@
 {
-	"id": "ink",
-	"name": "Ink",
+	"id": "obsidianink-transcription-fork",
+	"name": "ObsidianInk-TranscriptionFork",
 	"author": "Dale de Silva",
 	"description": "Hand write or draw directly between paragraphs in your notes using a digital pen, stylus, or Apple pencil. Useful for handwriting, sketches, scribbles, or even math equations and scientific notation. Runs on the tldraw framework and drawing provides an infinite canvas.",
 	"version": "0.4.0",
