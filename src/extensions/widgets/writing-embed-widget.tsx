@@ -3,7 +3,7 @@ import { MarkdownRenderChild, MarkdownView, TFile } from "obsidian";
 import * as React from "react";
 import { Root, createRoot } from "react-dom/client";
 import { InkFileData, stringifyPageData } from "src/utils/page-file";
-import { WritingEmbedData as WritingEmbedData, applyCommonAncestorStyling, removeEmbed } from "src/utils/embed";
+import { WritingEmbedData as WritingEmbedData, applyCommonAncestorStyling, insertMarkdownAfterEmbed, removeEmbed } from "src/utils/embed";
 import InkPlugin from "src/main";
 import WritingEmbed from "src/tldraw/writing/writing-embed";
 import { WRITE_EMBED_KEY } from "src/constants";
@@ -16,6 +16,7 @@ import {
 
 interface EmbedCtrls {
 	removeEmbed: Function,
+	insertTranscription: (markdown: string) => void,
 }
 
 ////////
@@ -27,6 +28,7 @@ export function registerWritingEmbed(plugin: InkPlugin) {
 			const embedData = JSON.parse(source) as WritingEmbedData;
 			const embedCtrls: EmbedCtrls = {
 				removeEmbed: () => removeEmbed(plugin, ctx, el),
+				insertTranscription: (markdown: string) => insertMarkdownAfterEmbed(plugin, ctx, el, markdown),
 			}
 			if(embedData.filepath) {
 				ctx.addChild(new WritingEmbedWidget(el, plugin, embedData, embedCtrls));
@@ -77,6 +79,7 @@ class WritingEmbedWidget extends MarkdownRenderChild {
 					pageData = {pageData}
 					save = {this.save}
 					remove = {this.embedCtrls.removeEmbed}
+					insertTranscription = {this.embedCtrls.insertTranscription}
 				/>
 			</JotaiProvider>
 		);

@@ -155,3 +155,25 @@ export function removeEmbed(plugin: InkPlugin, ctx: MarkdownPostProcessorContext
 	// This puts it back where the user expects.
 	cmEditor.setCursor(editorStart);
 }
+
+/**
+ * Inserts markdown text into the active note directly after an embed code block.
+ * Pass the context and el used when creating the embed. Each call inserts a fresh
+ * block — it never overwrites text the user may have edited.
+ */
+export function insertMarkdownAfterEmbed(plugin: InkPlugin, ctx: MarkdownPostProcessorContext, el: HTMLElement, markdown: string) {
+	const cmEditor = plugin.app.workspace.activeEditor?.editor;
+	if(!cmEditor) return;
+
+	const sectionInfo = ctx.getSectionInfo(el);
+	if(sectionInfo?.lineEnd === undefined) return;
+
+	// Insert on the line just after the embed's closing fence.
+	const insertPos: EditorPosition = {
+		line: sectionInfo.lineEnd + 1,
+		ch: 0,
+	}
+
+	const textToInsert = '\n' + markdown.trim() + '\n';
+	cmEditor.replaceRange( textToInsert, insertPos );
+}

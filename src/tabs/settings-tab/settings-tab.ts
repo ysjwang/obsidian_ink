@@ -7,6 +7,8 @@ import { ConfirmationModal } from "src/modals/confirmation-modal/confirmation-mo
 import { DEFAULT_SETTINGS } from 'src/types/plugin-settings';
 import { showWelcomeTips, showWelcomeTips_maybe } from 'src/notices/welcome-notice';
 import { ToggleAccordionSetting } from 'src/components/dom-components/toggle-accordion-setting';
+import { MODEL_PRESETS, PROVIDER_LABELS } from 'src/logic/ocr-service';
+import { TranscriptionProvider } from 'src/types/plugin-settings';
 
 /////////
 /////////
@@ -42,6 +44,11 @@ export class MySettingsTab extends PluginSettingTab {
 		containerEl.createEl('hr');
 		if(this.plugin.settings.writingEnabled)	insertWritingSettings(containerEl, this.plugin, () => this.display());
 		if(this.plugin.settings.drawingEnabled)	insertDrawingSettings(containerEl, this.plugin, () => this.display());
+
+		if(this.plugin.settings.writingEnabled) {
+			containerEl.createEl('hr');
+			insertTranscriptionSettings(containerEl, this.plugin, () => this.display());
+		}
 	
 		new Setting(containerEl)
 			.addButton( (button) => {
@@ -372,6 +379,96 @@ function insertWritingSettings(containerEl: HTMLElement, plugin: InkPlugin, refr
 			})
 		});
 	insertWritingLimitations(sectionEl);
+}
+
+function insertTranscriptionSettings(containerEl: HTMLElement, plugin: InkPlugin, refresh: Function) {
+	const sectionEl = containerEl.createDiv('ddc_ink_section ddc_ink_controls-section');
+	sectionEl.createEl('h2', { text: 'Transcription (AI)' });
+	sectionEl.createEl('p', { text: `Transcribe a handwriting embed into editable Markdown using an AI model. Use the "Transcribe" button on a writing embed.` });
+	sectionEl.createEl('p', { text: `Privacy note: when you transcribe, an image of your handwriting is sent to the selected provider.`, cls: 'ddc_ink_setting-warning' });
+
+	const provider = plugin.settings.transcriptionProvider;
+
+	new Setting(sectionEl)
+		.setClass('ddc_ink_setting')
+		.setName('Provider')
+		.setDesc('Which AI service performs the transcription.')
+		.addDropdown((dropdown) => {
+			(Object.keys(PROVIDER_LABELS) as TranscriptionProvider[]).forEach((key) => {
+				dropdown.addOption(key, PROVIDER_LABELS[key]);
+			});
+			dropdown.setValue(provider);
+			dropdown.onChange(async (value: string) => {
+				const newProvider = value as TranscriptionProvider;
+				plugin.settings.transcriptionProvider = newProvider;
+				// Reset to the new provider's default model so the model id stays valid.
+				plugin.settings.transcriptionModel = MODEL_PRESETS[newProvider][0].id;
+				await plugin.saveSettings();
+				refresh();
+			});
+		});
+
+	new Setting(sectionEl)
+		.setClass('ddc_ink_setting')
+		.setName('Model')
+		.setDesc('Pick a suggested model, or enter a custom model id below.')
+		.addDropdown((dropdown) => {
+			MODEL_PRESETS[provider].forEach((preset) => {
+				dropdown.addOption(preset.id, preset.label);
+			});
+			const isPreset = MODEL_PRESETS[provider].some((p) => p.id === plugin.settings.transcriptionModel);
+			if (isPreset) dropdown.setValue(plugin.settings.transcriptionModel);
+			dropdown.onChange(async (value: string) => {
+				plugin.settings.transcriptionModel = value;
+				await plugin.saveSettings();
+				refresh();
+			});
+		});
+
+	const saveModel = async (enteredValue: string) => {
+		const value = enteredValue.trim();
+		if (!value) return;
+		plugin.settings.transcriptionModel = value;
+		await plugin.saveSettings();
+		refresh();
+	};
+	const modelInputSetting = new Setting(sectionEl)
+		.setClass('ddc_ink_setting')
+		.setName('Custom model id')
+		.addText((textItem) => {
+			textItem.setValue(plugin.settings.transcriptionModel);
+			textItem.setPlaceholder(MODEL_PRESETS[provider][0].id);
+			textItem.inputEl.addEventListener('blur', () => saveModel(textItem.getValue()));
+			textItem.inputEl.addEventListener('keypress', (ev: KeyboardEvent) => {
+				if (ev.key === 'Enter') saveModel(textItem.getValue());
+			});
+		});
+	modelInputSetting.settingEl.classList.add('ddc_ink_input-medium');
+
+	const addKeyField = (name: string, getValue: () => string, setValue: (v: string) => Promise<void>) => {
+		new Setting(sectionEl)
+			.setClass('ddc_ink_setting')
+			.setName(name)
+			.addText((textItem) => {
+				textItem.inputEl.type = 'password';
+				textItem.setValue(getValue());
+				textItem.setPlaceholder('Paste API key');
+				const save = () => setValue(textItem.getValue().trim());
+				textItem.inputEl.addEventListener('blur', save);
+				textItem.inputEl.addEventListener('keypress', (ev: KeyboardEvent) => {
+					if (ev.key === 'Enter') save();
+				});
+			});
+	};
+
+	addKeyField('Anthropic API key', () => plugin.settings.anthropicApiKey, async (v) => {
+		plugin.settings.anthropicApiKey = v;
+		await plugin.saveSettings();
+	});
+	addKeyField('Gemini API key', () => plugin.settings.geminiApiKey, async (v) => {
+		plugin.settings.geminiApiKey = v;
+		await plugin.saveSettings();
+	});
 }
 
 function insertWritingLimitations(containerEl: HTMLElement) {

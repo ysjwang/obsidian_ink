@@ -18,6 +18,7 @@ import {getAssetUrlsByImport} from '@tldraw/assets/imports';
 import { editorActiveAtom, WritingEmbedState, embedStateAtom } from './writing-embed';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { getInkFileData } from 'src/utils/getInkFileData';
+import { svgToPngDataUri } from 'src/utils/screenshots';
 import { verbose } from 'src/utils/log-to-console';
 import { SecondaryMenuBar } from '../secondary-menu-bar/secondary-menu-bar';
 import ModifyMenu from '../modify-menu/modify-menu';
@@ -182,6 +183,12 @@ export function TldrawWritingEditor(props: TldrawWritingEditorProps) {
 					const cameraY = camera.y;
 					initWritingCamera(editor);
 					editor.setCamera({x: camera.x, y: cameraY})
+				},
+				// Renders the current strokes to a PNG data URI for AI transcription.
+				getWritingImage: async (): Promise<string | null> => {
+					const svgObj = await getWritingSvg(editor);
+					if(!svgObj) return null;
+					return await svgToPngDataUri(svgObj);
 				}
 			})
 		}

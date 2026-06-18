@@ -25,7 +25,14 @@ export interface PluginSettings {
 	drawingEnabled: boolean,
 	drawingFrameWhenLocked: boolean,
 	drawingBackgroundWhenLocked: boolean,
+	// Transcription (AI handwriting -> markdown)
+	transcriptionProvider: TranscriptionProvider,
+	transcriptionModel: string,
+	anthropicApiKey: string,
+	geminiApiKey: string,
 }
+
+export type TranscriptionProvider = 'claude' | 'gemini';
 
 export const DEFAULT_SETTINGS: PluginSettings = {
 	// Helpers
@@ -51,4 +58,9 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	drawingEnabled: true,
 	drawingFrameWhenLocked: false,
 	drawingBackgroundWhenLocked: false,
+	// Transcription (AI handwriting -> markdown)
+	transcriptionProvider: 'claude',
+	transcriptionModel: 'claude-opus-4-8',
+	anthropicApiKey: '',
+	geminiApiKey: '',
 }

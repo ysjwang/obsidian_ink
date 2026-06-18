@@ -4,7 +4,9 @@ import { useRef, useState } from "react";
 import { TldrawWritingEditorWrapper } from "./tldraw-writing-editor";
 import InkPlugin from "../../main";
 import { InkFileData } from "../../utils/page-file";
-import { TFile } from "obsidian";
+import { Notice, TFile } from "obsidian";
+import { ConfirmationModal } from "src/modals/confirmation-modal/confirmation-modal";
+import { transcribeImage } from "src/logic/ocr-service";
 import { duplicateWritingFile, rememberDrawingFile, rememberWritingFile } from "src/utils/rememberDrawingFile";
 import { isEmptyWritingFile } from "src/utils/tldraw-helpers";
 import { useSelector } from "react-redux";
@@ -44,6 +46,7 @@ export const editorActiveAtom = atom<boolean>((get) => {
 export type WritingEditorControls = {
 	save: Function,
 	saveAndHalt: Function,
+	getWritingImage?: () => Promise<string | null>,
 }
 
 export function WritingEmbed (props: {
@@ -52,6 +55,7 @@ export function WritingEmbed (props: {
 	pageData: InkFileData,
 	save: (pageData: InkFileData) => void,
 	remove: Function,
+	insertTranscription: (markdown: string) => void,
 }) {
 	const embedContainerElRef = useRef<HTMLDivElement>(null);
 	const resizeContainerElRef = useRef<HTMLDivElement>(null);
@@ -92,6 +96,10 @@ export function WritingEmbed (props: {
 			action: async () => {
 				await rememberWritingFile(props.plugin, props.writingFileRef);
 			}
+		},
+		{
+			text: 'Transcribe to text',
+			action: () => confirmAndTranscribe(),
 		},
 		// {
 		// 	text: 'Open writing',
@@ -160,6 +168,43 @@ export function WritingEmbed (props: {
 
 	function registerEditorControls(handlers: WritingEditorControls) {
 		editorControlsRef.current = handlers;
+	}
+
+	// Confirms (every press), renders the strokes to an image, transcribes via the
+	// configured AI provider, and inserts the result as markdown below the embed.
+	function confirmAndTranscribe() {
+		new ConfirmationModal({
+			plugin: props.plugin,
+			title: 'Transcribe handwriting',
+			message: `Send an image of this handwriting to ${props.plugin.settings.transcriptionProvider === 'gemini' ? 'Google Gemini' : 'Anthropic Claude'} and insert the transcribed text below the embed?`,
+			confirmLabel: 'Transcribe',
+			confirmAction: () => runTranscription(),
+		}).open();
+	}
+
+	async function runTranscription() {
+		const getImage = editorControlsRef.current?.getWritingImage;
+		if(!getImage) {
+			new Notice('Open the writing section before transcribing.');
+			return;
+		}
+
+		const notice = new Notice('Transcribing handwriting…', 0);
+		try {
+			const pngDataUri = await getImage();
+			if(!pngDataUri) throw new Error('Could not render the handwriting to an image.');
+
+			const markdown = await transcribeImage(props.plugin, pngDataUri);
+			if(!markdown) throw new Error('No text was transcribed.');
+
+			props.insertTranscription(markdown);
+			notice.hide();
+			new Notice('Transcription inserted below the embed.');
+		} catch (err) {
+			notice.hide();
+			const message = err instanceof Error ? err.message : 'Transcription failed.';
+			new Notice(message, 8000);
+		}
 	}
 
 	function resizeContainer(height: number) {
