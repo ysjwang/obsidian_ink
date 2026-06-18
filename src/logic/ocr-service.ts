@@ -24,12 +24,33 @@ export const PROVIDER_LABELS: Record<TranscriptionProvider, string> = {
     gemini: 'Google (Gemini)',
 };
 
-const TRANSCRIBE_PROMPT =
-    'Transcribe the handwriting in this image to Markdown. ' +
-    'Preserve line breaks, lists, and headings where they are visually apparent. ' +
-    'Output only the transcription — no preamble, no commentary, no code fences.';
+// How line breaks in the handwriting should map to the transcribed text.
+export type TranscriptionMode = 'verbatim' | 'interpret';
+
+const PROMPTS: Record<TranscriptionMode, string> = {
+    // Keep every line break exactly as written.
+    verbatim:
+        'Transcribe the handwriting in this image to Markdown. ' +
+        'Preserve the line breaks exactly as they appear: each new line in the image is a new line in the output. ' +
+        'Preserve lists and headings where they are visually apparent. ' +
+        'Output only the transcription — no preamble, no commentary, no code fences.',
+    // Reflow wrapped lines into continuous text; only break where the writer meant to.
+    interpret:
+        'Transcribe the handwriting in this image to Markdown. ' +
+        'Keep sentences and flowing text together on the same line — do NOT insert a line break ' +
+        'merely because the handwriting wrapped to fit the page width. ' +
+        'Only start a new line where the writer clearly intended one: a blank line or paragraph break, ' +
+        'a list item, or a heading. ' +
+        'Output only the transcription — no preamble, no commentary, no code fences.',
+};
 
 const MAX_OUTPUT_TOKENS = 4096;
+
+// Human-readable "provider · model" string for progress notices.
+export function getTranscriptionModelLabel(plugin: InkPlugin): string {
+    const provider = plugin.settings.transcriptionProvider;
+    return `${PROVIDER_LABELS[provider]} · ${plugin.settings.transcriptionModel}`;
+}
 
 // Old stubbed auto-transcript flow (kept so fetchTranscript.ts still compiles).
 // The live transcription path is transcribeImage() below.
@@ -55,15 +76,16 @@ function parseDataUri(dataUri: string): ParsedImage {
  * the transcribed text as Markdown. Uses Obsidian's requestUrl so it works on
  * mobile and bypasses CORS. Throws with a user-readable message on failure.
  */
-export async function transcribeImage(plugin: InkPlugin, pngDataUri: string): Promise<string> {
+export async function transcribeImage(plugin: InkPlugin, pngDataUri: string, mode: TranscriptionMode): Promise<string> {
     const { transcriptionProvider } = plugin.settings;
     const image = parseDataUri(pngDataUri);
+    const prompt = PROMPTS[mode];
 
     switch (transcriptionProvider) {
         case 'claude':
-            return transcribeWithClaude(plugin, image);
+            return transcribeWithClaude(plugin, image, prompt);
         case 'gemini':
-            return transcribeWithGemini(plugin, image);
+            return transcribeWithGemini(plugin, image, prompt);
         default:
             throw new Error(`Unknown transcription provider: ${transcriptionProvider}`);
     }
@@ -73,7 +95,7 @@ export async function transcribeImage(plugin: InkPlugin, pngDataUri: string): Pr
 // Provider adapters
 ///////////////////
 
-async function transcribeWithClaude(plugin: InkPlugin, image: ParsedImage): Promise<string> {
+async function transcribeWithClaude(plugin: InkPlugin, image: ParsedImage, prompt: string): Promise<string> {
     const apiKey = plugin.settings.anthropicApiKey?.trim();
     if (!apiKey) throw new Error('No Anthropic API key set. Add one in the Ink plugin settings.');
 
@@ -94,7 +116,7 @@ async function transcribeWithClaude(plugin: InkPlugin, image: ParsedImage): Prom
                 role: 'user',
                 content: [
                     { type: 'image', source: { type: 'base64', media_type: image.mediaType, data: image.base64 } },
-                    { type: 'text', text: TRANSCRIBE_PROMPT },
+                    { type: 'text', text: prompt },
                 ],
             }],
         }),
@@ -113,7 +135,7 @@ async function transcribeWithClaude(plugin: InkPlugin, image: ParsedImage): Prom
     return text.trim();
 }
 
-async function transcribeWithGemini(plugin: InkPlugin, image: ParsedImage): Promise<string> {
+async function transcribeWithGemini(plugin: InkPlugin, image: ParsedImage, prompt: string): Promise<string> {
     const apiKey = plugin.settings.geminiApiKey?.trim();
     if (!apiKey) throw new Error('No Gemini API key set. Add one in the Ink plugin settings.');
 
@@ -130,7 +152,7 @@ async function transcribeWithGemini(plugin: InkPlugin, image: ParsedImage): Prom
             contents: [{
                 parts: [
                     { inline_data: { mime_type: image.mediaType, data: image.base64 } },
-                    { text: TRANSCRIBE_PROMPT },
+                    { text: prompt },
                 ],
             }],
             generationConfig: { maxOutputTokens: MAX_OUTPUT_TOKENS },

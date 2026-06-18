@@ -6,7 +6,7 @@ import InkPlugin from "../../main";
 import { InkFileData } from "../../utils/page-file";
 import { Notice, TFile } from "obsidian";
 import { ConfirmationModal } from "src/modals/confirmation-modal/confirmation-modal";
-import { transcribeImage } from "src/logic/ocr-service";
+import { getTranscriptionModelLabel, transcribeImage, TranscriptionMode } from "src/logic/ocr-service";
 import { duplicateWritingFile, rememberDrawingFile, rememberWritingFile } from "src/utils/rememberDrawingFile";
 import { isEmptyWritingFile } from "src/utils/tldraw-helpers";
 import { useSelector } from "react-redux";
@@ -98,8 +98,12 @@ export function WritingEmbed (props: {
 			}
 		},
 		{
-			text: 'Transcribe to text',
-			action: () => confirmAndTranscribe(),
+			text: 'Transcribe to text (line breaks as is)',
+			action: () => confirmAndTranscribe('verbatim'),
+		},
+		{
+			text: 'Transcribe to text (interpret line breaks)',
+			action: () => confirmAndTranscribe('interpret'),
 		},
 		// {
 		// 	text: 'Open writing',
@@ -172,29 +176,29 @@ export function WritingEmbed (props: {
 
 	// Confirms (every press), renders the strokes to an image, transcribes via the
 	// configured AI provider, and inserts the result as markdown below the embed.
-	function confirmAndTranscribe() {
+	function confirmAndTranscribe(mode: TranscriptionMode) {
 		new ConfirmationModal({
 			plugin: props.plugin,
 			title: 'Transcribe handwriting',
-			message: `Send an image of this handwriting to ${props.plugin.settings.transcriptionProvider === 'gemini' ? 'Google Gemini' : 'Anthropic Claude'} and insert the transcribed text below the embed?`,
+			message: `Send an image of this handwriting to ${getTranscriptionModelLabel(props.plugin)} and insert the transcribed text below the embed?`,
 			confirmLabel: 'Transcribe',
-			confirmAction: () => runTranscription(),
+			confirmAction: () => runTranscription(mode),
 		}).open();
 	}
 
-	async function runTranscription() {
+	async function runTranscription(mode: TranscriptionMode) {
 		const getImage = editorControlsRef.current?.getWritingImage;
 		if(!getImage) {
 			new Notice('Open the writing section before transcribing.');
 			return;
 		}
 
-		const notice = new Notice('Transcribing handwriting…', 0);
+		const notice = new Notice(`Transcribing with ${getTranscriptionModelLabel(props.plugin)}…`, 0);
 		try {
 			const pngDataUri = await getImage();
 			if(!pngDataUri) throw new Error('Could not render the handwriting to an image.');
 
-			const markdown = await transcribeImage(props.plugin, pngDataUri);
+			const markdown = await transcribeImage(props.plugin, pngDataUri, mode);
 			if(!markdown) throw new Error('No text was transcribed.');
 
 			props.insertTranscription(markdown);
