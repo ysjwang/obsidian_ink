@@ -39,6 +39,8 @@ What it does: computes the next semver from `manifest.json`, writes it into `man
 
 Requirements: `gh` authenticated (`gh auth login`) with push access. The target repo is derived from the **`origin`** remote (intentionally not `gh`'s default-repo resolution, which points at the upstream fork parent). BRAT then installs/updates from `https://github.com/<origin-owner>/obsidian_ink`.
 
+**Cut releases from the default branch.** BRAT downloads the code (`main.js`) from the latest *release*, but reads the plugin **identity and version from the root `manifest.json` on the repo's default branch** (`main`). If you release from a non-default branch, BRAT shows the stale default-branch name/version (e.g. the upstream "Ink / 0.3.4") even though the new code installed. So run `npm run release` from `main` (the script commits to and tags the current branch). Develop on feature branches if you like, but merge to `main` before releasing.
+
 ## Architecture
 
 ### Plugin entry & feature gating
