@@ -12,7 +12,9 @@
 #     <x.y.z>                  set an explicit version (must be valid semver)
 #
 #   options
-#     --notes "text"   custom release notes (default: auto-generated)
+#     --notes "text"   release notes for the GitHub release AND the in-app update
+#                      notice. Each line becomes one bullet in the in-app notice.
+#                      (default: a generic maintenance-release note)
 #     --no-push        skip git commit+push; tag the current HEAD as-is
 #     --dry-run        print what would happen, change/publish nothing
 #
@@ -84,6 +86,7 @@ gh release view "$NEW" --repo "$REPO" >/dev/null 2>&1 && die "Release/tag $NEW a
 
 if [ "$DRY_RUN" -eq 1 ]; then
   log "[dry-run] Would bump manifest.json, manifest-beta.json, package.json, versions.json to $NEW"
+  log "[dry-run] Would write changelog.json entry for $NEW (from --notes)"
   log "[dry-run] Would run: npm run build"
   [ "$DO_PUSH" -eq 1 ] && log "[dry-run] Would commit ALL working-tree changes + push to $BRANCH"
   log "[dry-run] Would create release $NEW on $REPO with main.js, manifest.json, styles.css"
@@ -107,6 +110,29 @@ node -e '
   versions[v] = minApp;
   fs.writeFileSync("versions.json", JSON.stringify(versions, null, "\t") + "\n");
 ' "$NEW"
+
+# --- update the in-app changelog notice (drives showVersionNotice) ----------
+# Each line of --notes becomes a bullet for this version's update notice, so the
+# in-app notice and the GitHub release stay in sync. Must run before the build,
+# since changelog.json is bundled into main.js.
+log "Writing changelog entry for $NEW"
+node -e '
+  const fs = require("fs");
+  const v = process.argv[1];
+  const raw = process.argv[2] || "";
+  const jsonPath = "src/notices/changelog.json";
+  const tsPath = "src/notices/changelog.ts";
+  const cl = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
+  const items = raw.split(/\r?\n/).map(s => s.replace(/^\s*[-*]\s*/, "").trim()).filter(Boolean);
+  cl[v] = items.length ? items : ["Maintenance release."];
+  fs.writeFileSync(jsonPath, JSON.stringify(cl, null, "\t") + "\n");
+  // Regenerate the TS module that the plugin imports (avoids resolveJsonModule).
+  const ts = "// AUTO-GENERATED from changelog.json by scripts/josiah-release.sh — do not edit by hand.\n"
+    + "// Edit changelog.json (or pass --notes when releasing) instead.\n"
+    + "const changelog: Record<string, string[]> = " + JSON.stringify(cl, null, "\t") + ";\n\n"
+    + "export default changelog;\n";
+  fs.writeFileSync(tsPath, ts);
+' "$NEW" "$NOTES"
 
 # --- build ------------------------------------------------------------------
 log "Building (npm run build)"
